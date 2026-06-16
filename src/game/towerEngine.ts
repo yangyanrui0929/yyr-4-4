@@ -288,6 +288,12 @@ export function gameTick(now: number) {
 }
 
 let spawnQueueActive = false;
+let spawnCancelled = false;
+
+export function cancelSpawn() {
+  spawnCancelled = true;
+  spawnQueueActive = false;
+}
 
 export async function spawnWaveEnemies(waveIndex: number) {
   const state = useGameStore.getState();
@@ -295,12 +301,13 @@ export async function spawnWaveEnemies(waveIndex: number) {
   const wave = waves[waveIndex];
   if (!wave) return;
 
+  spawnCancelled = false;
   spawnQueueActive = true;
   const startPos = state.path[0];
 
   for (const group of wave.enemies) {
     for (let i = 0; i < group.count; i++) {
-      if (useGameStore.getState().phase !== "night") {
+      if (useGameStore.getState().phase !== "night" || spawnCancelled) {
         spawnQueueActive = false;
         return;
       }

@@ -80,6 +80,8 @@ export interface RevertNode {
   towers: Tower[];
   savedAt: number;
   waveIndex: number;
+  waveReward: number;
+  todayFoodRevenue: number;
 }
 
 export interface Bullet {
@@ -121,6 +123,7 @@ export interface GameState {
   waveInProgress: boolean;
   todayRevenue: number;
   todayExpense: number;
+  todayFoodRevenue: number;
   waveReward: number;
   selectedTowerType: TowerType | null;
   selectedTowerId: string | null;

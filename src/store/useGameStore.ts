@@ -24,6 +24,7 @@ import {
   SHADOW_BOOST_MULTIPLIER,
 } from "@/game/config";
 import { loadGame, saveGame } from "@/utils/storage";
+import { cancelSpawn } from "@/game/towerEngine";
 
 let idCounter = 0;
 const genId = () => `${Date.now()}-${idCounter++}`;
@@ -92,6 +93,7 @@ const createInitialState = (): GameState => {
       waveInProgress: false,
       todayRevenue: 0,
       todayExpense: 0,
+      todayFoodRevenue: 0,
       waveReward: 0,
       selectedTowerType: null,
       selectedTowerId: null,
@@ -124,6 +126,7 @@ const createInitialState = (): GameState => {
     waveInProgress: false,
     todayRevenue: 0,
     todayExpense: 0,
+    todayFoodRevenue: 0,
     waveReward: 0,
     selectedTowerType: null,
     selectedTowerId: null,
@@ -162,6 +165,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       waveInProgress: false,
       todayRevenue: 0,
       todayExpense: 0,
+      todayFoodRevenue: 0,
       waveReward: 0,
       selectedTowerType: null,
       selectedTowerId: null,
@@ -300,7 +304,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
   startDay: () => {
     set((s) => {
-      const netProfit = s.todayRevenue - s.todayExpense;
+      const foodProfit = s.todayFoodRevenue - s.todayExpense;
       let newTickets = s.revertTickets;
       let earnedToday = 0;
 
@@ -309,7 +313,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         earnedToday += 1;
       }
 
-      if (netProfit >= HIGH_PROFIT_THRESHOLD) {
+      if (foodProfit >= HIGH_PROFIT_THRESHOLD) {
         newTickets += 1;
         earnedToday += 1;
       }
@@ -319,6 +323,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         day: s.day + 1,
         todayRevenue: 0,
         todayExpense: 0,
+        todayFoodRevenue: 0,
         waveReward: 0,
         recipes: s.recipes.map((r) => ({ ...r, prepared: 0 })),
         towers: [],
@@ -523,6 +528,7 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       phase: "settlement",
       gold: s.gold + foodRevenue,
       todayRevenue: foodRevenue + s.waveReward,
+      todayFoodRevenue: foodRevenue,
       hadPerfectNight: perfectNight,
     }));
     get().saveProgress();
@@ -544,6 +550,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
         towers: state.towers.map((t) => ({ ...t })),
         savedAt: Date.now(),
         waveIndex: state.currentWave,
+        waveReward: state.waveReward,
+        todayFoodRevenue: state.todayFoodRevenue,
       },
     });
     return true;
@@ -555,6 +563,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     if (!state.revertNode) return false;
     if (state.phase !== "night") return false;
 
+    cancelSpawn();
+
     const node = state.revertNode;
     set((s) => ({
       revertTickets: s.revertTickets - 1,
@@ -564,6 +574,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       enemies: [],
       bullets: [],
       floatingTexts: [],
+      waveReward: node.waveReward,
+      todayFoodRevenue: node.todayFoodRevenue,
       waveInProgress: false,
       currentWave: node.waveIndex,
       isPaused: false,

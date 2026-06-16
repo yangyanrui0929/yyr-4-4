@@ -56,6 +56,9 @@ export default function Battlefield() {
     if (!waveInProgress) return;
     if (lastSpawnWaveRef.current === currentWave && isSpawnActive()) return;
     if (lastSpawnWaveRef.current === currentWave) return;
+    if (lastSpawnWaveRef.current > currentWave) {
+      lastSpawnWaveRef.current = -1;
+    }
 
     lastSpawnWaveRef.current = currentWave;
     spawnWaveEnemies(currentWave);

@@ -7,6 +7,7 @@ export default function SettlementModal() {
     day,
     todayRevenue,
     todayExpense,
+    todayFoodRevenue,
     waveReward,
     recipes,
     gameOver,
@@ -19,7 +20,8 @@ export default function SettlementModal() {
 
   const netProfit = todayRevenue - todayExpense;
   const isProfit = netProfit >= 0;
-  const isHighProfit = netProfit >= HIGH_PROFIT_THRESHOLD;
+  const foodProfit = todayFoodRevenue - todayExpense;
+  const isHighProfit = foodProfit >= HIGH_PROFIT_THRESHOLD;
 
   let foodRevenue = 0;
   for (const r of recipes) {
@@ -201,7 +203,7 @@ export default function SettlementModal() {
                   isHighProfit ? "text-purple-600" : "text-gray-400"
                 }`}
               >
-                {isHighProfit ? "+🎟️ 1" : `还差 ${Math.max(0, HIGH_PROFIT_THRESHOLD - netProfit)}`}
+                {isHighProfit ? "+🎟️ 1" : `还差 ${Math.max(0, HIGH_PROFIT_THRESHOLD - foodProfit)}`}
               </span>
             </div>
 
