@@ -5,6 +5,8 @@ import type {
   Enemy,
   Bullet,
   FloatingText,
+  ShadowTrail,
+  EnemyType,
 } from "@/types/game";
 import {
   INITIAL_GOLD,
@@ -17,6 +19,9 @@ import {
   ENEMY_CONFIGS,
   CELL_SIZE,
   generateWaves,
+  HIGH_PROFIT_THRESHOLD,
+  SHADOW_BOOST_DURATION,
+  SHADOW_BOOST_MULTIPLIER,
 } from "@/game/config";
 import { loadGame, saveGame } from "@/utils/storage";
 
@@ -60,6 +65,12 @@ interface GameActions {
   finishAllWaves: () => void;
   setGameOver: () => void;
   getCurrentWaves: () => ReturnType<typeof generateWaves>;
+
+  setRevertNode: () => boolean;
+  useRevertTicket: () => boolean;
+  addRevertTicket: (amount: number) => void;
+  recordEscapedEnemy: (type: EnemyType, positions: { x: number; y: number; pathIndex: number }[]) => void;
+  clearShadowTrails: () => void;
 }
 
 const createInitialState = (): GameState => {
@@ -88,6 +99,12 @@ const createInitialState = (): GameState => {
       gridPath: GRID_PATH,
       isPaused: false,
       gameOver: false,
+      revertTickets: saved.revertTickets ?? 0,
+      revertNode: null,
+      shadowTrails: saved.shadowTrails ?? [],
+      escapedCount: 0,
+      hadPerfectNight: false,
+      earnedTicketsToday: 0,
     };
   }
 
@@ -114,6 +131,12 @@ const createInitialState = (): GameState => {
     gridPath: GRID_PATH,
     isPaused: false,
     gameOver: false,
+    revertTickets: 0,
+    revertNode: null,
+    shadowTrails: [],
+    escapedCount: 0,
+    hadPerfectNight: false,
+    earnedTicketsToday: 0,
   };
 };
 
@@ -144,6 +167,12 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       selectedTowerId: null,
       isPaused: false,
       gameOver: false,
+      revertTickets: 0,
+      revertNode: null,
+      shadowTrails: [],
+      escapedCount: 0,
+      hadPerfectNight: false,
+      earnedTicketsToday: 0,
     });
   },
 
@@ -157,6 +186,8 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       lives: saved.lives ?? INITIAL_LIVES,
       ingredients: saved.ingredients ?? INITIAL_INGREDIENTS.map((i) => ({ ...i })),
       recipes: saved.recipes ?? INITIAL_RECIPES.map((r) => ({ ...r })),
+      revertTickets: saved.revertTickets ?? 0,
+      shadowTrails: saved.shadowTrails ?? [],
     });
     return true;
   },
@@ -260,28 +291,51 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
       selectedTowerType: null,
       selectedTowerId: null,
       isPaused: false,
+      revertNode: null,
+      escapedCount: 0,
+      hadPerfectNight: false,
+      earnedTicketsToday: 0,
     });
   },
 
   startDay: () => {
-    set((s) => ({
-      phase: "day",
-      day: s.day + 1,
-      todayRevenue: 0,
-      todayExpense: 0,
-      waveReward: 0,
-      recipes: s.recipes.map((r) => ({ ...r, prepared: 0 })),
-      towers: [],
-      enemies: [],
-      bullets: [],
-      floatingTexts: [],
-      currentWave: 0,
-      totalWaves: 0,
-      waveInProgress: false,
-      selectedTowerType: null,
-      selectedTowerId: null,
-      isPaused: false,
-    }));
+    set((s) => {
+      const netProfit = s.todayRevenue - s.todayExpense;
+      let newTickets = s.revertTickets;
+      let earnedToday = 0;
+
+      if (s.hadPerfectNight) {
+        newTickets += 1;
+        earnedToday += 1;
+      }
+
+      if (netProfit >= HIGH_PROFIT_THRESHOLD) {
+        newTickets += 1;
+        earnedToday += 1;
+      }
+
+      return {
+        phase: "day",
+        day: s.day + 1,
+        todayRevenue: 0,
+        todayExpense: 0,
+        waveReward: 0,
+        recipes: s.recipes.map((r) => ({ ...r, prepared: 0 })),
+        towers: [],
+        enemies: [],
+        bullets: [],
+        floatingTexts: [],
+        currentWave: 0,
+        totalWaves: 0,
+        waveInProgress: false,
+        selectedTowerType: null,
+        selectedTowerId: null,
+        isPaused: false,
+        revertTickets: newTickets,
+        revertNode: null,
+        earnedTicketsToday: earnedToday,
+      };
+    });
     get().saveProgress();
   },
 
@@ -374,10 +428,23 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
 
   togglePause: () => set((s) => ({ isPaused: !s.isPaused })),
 
-  addEnemy: (enemy) =>
+  addEnemy: (enemy) => {
+    const state = get();
+    const hasMatchingShadow = state.shadowTrails.some(
+      (t) => t.type === enemy.type
+    );
+    const now = performance.now();
     set((s) => ({
-      enemies: [...s.enemies, { ...enemy, id: genId() }],
-    })),
+      enemies: [
+        ...s.enemies,
+        {
+          ...enemy,
+          id: genId(),
+          shadowBoostUntil: hasMatchingShadow ? now + SHADOW_BOOST_DURATION : undefined,
+        },
+      ],
+    }));
+  },
 
   updateEnemy: (id, updates) =>
     set((s) => ({
@@ -451,10 +518,12 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
     for (const r of state.recipes) {
       foodRevenue += r.prepared * r.sellPrice;
     }
+    const perfectNight = state.escapedCount === 0;
     set((s) => ({
       phase: "settlement",
       gold: s.gold + foodRevenue,
       todayRevenue: foodRevenue + s.waveReward,
+      hadPerfectNight: perfectNight,
     }));
     get().saveProgress();
   },
@@ -462,6 +531,71 @@ export const useGameStore = create<GameState & GameActions>((set, get) => ({
   setGameOver: () => set({ gameOver: true, phase: "settlement" }),
 
   getCurrentWaves: () => generateWaves(get().day),
+
+  setRevertNode: () => {
+    const state = get();
+    if (state.phase !== "night") return false;
+    if (state.waveInProgress) return false;
+
+    set({
+      revertNode: {
+        gold: state.gold,
+        lives: state.lives,
+        towers: state.towers.map((t) => ({ ...t })),
+        savedAt: Date.now(),
+        waveIndex: state.currentWave,
+      },
+    });
+    return true;
+  },
+
+  useRevertTicket: () => {
+    const state = get();
+    if (state.revertTickets <= 0) return false;
+    if (!state.revertNode) return false;
+    if (state.phase !== "night") return false;
+
+    const node = state.revertNode;
+    set((s) => ({
+      revertTickets: s.revertTickets - 1,
+      gold: node.gold,
+      lives: node.lives,
+      towers: node.towers.map((t) => ({ ...t })),
+      enemies: [],
+      bullets: [],
+      floatingTexts: [],
+      waveInProgress: false,
+      currentWave: node.waveIndex,
+      isPaused: false,
+      selectedTowerId: null,
+    }));
+    return true;
+  },
+
+  addRevertTicket: (amount: number) => {
+    set((s) => ({
+      revertTickets: s.revertTickets + amount,
+      earnedTicketsToday: s.earnedTicketsToday + amount,
+    }));
+  },
+
+  recordEscapedEnemy: (type: EnemyType, positions: { x: number; y: number; pathIndex: number }[]) => {
+    set((s) => {
+      const newTrail: ShadowTrail = {
+        type,
+        day: s.day,
+        pathPositions: positions,
+      };
+      return {
+        shadowTrails: [...s.shadowTrails, newTrail],
+        escapedCount: s.escapedCount + 1,
+      };
+    });
+  },
+
+  clearShadowTrails: () => {
+    set({ shadowTrails: [] });
+  },
 }));
 
 export function getTowerStats(tower: { type: TowerType; level: number }) {

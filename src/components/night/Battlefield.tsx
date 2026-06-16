@@ -7,7 +7,7 @@ import {
   GRID_COLS,
   GRID_ROWS,
 } from "@/game/config";
-import { gameTick, drawBattlefield, spawnWaveEnemies, isSpawnActive } from "@/game/towerEngine";
+import { gameTick, drawBattlefield, spawnWaveEnemies, isSpawnActive, clearTrailCache } from "@/game/towerEngine";
 
 export default function Battlefield() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -64,6 +64,8 @@ export default function Battlefield() {
   useEffect(() => {
     if (phase !== "night") {
       lastSpawnWaveRef.current = -1;
+    } else {
+      clearTrailCache();
     }
   }, [phase]);
 

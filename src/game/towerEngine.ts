@@ -7,6 +7,9 @@ import {
   CANVAS_HEIGHT,
   TOWER_CONFIGS,
   ENEMY_CONFIGS,
+  SHADOW_BOOST_MULTIPLIER,
+  SHADOW_TRAIL_MAX,
+  SHADOW_TRAIL_SAMPLE_INTERVAL,
 } from "@/game/config";
 import type { Enemy, Bullet, Tower, FloatingText } from "@/types/game";
 
@@ -15,6 +18,9 @@ function distance(x1: number, y1: number, x2: number, y2: number) {
   const dy = y2 - y1;
   return Math.sqrt(dx * dx + dy * dy);
 }
+
+const enemyTrailSamples: Map<string, { x: number; y: number; pathIndex: number }[]> = new Map();
+let sampleCounter = 0;
 
 export function gameTick(now: number) {
   const state = useGameStore.getState();
@@ -35,7 +41,11 @@ export function gameTick(now: number) {
     }
   }
 
+  sampleCounter++;
+  const shouldSample = sampleCounter % SHADOW_TRAIL_SAMPLE_INTERVAL === 0;
+
   const enemiesToRemove: string[] = [];
+  const escapedEnemies: { id: string; type: any }[] = [];
   const enemyUpdates: Map<string, Partial<Enemy>> = new Map();
 
   for (const enemy of state.enemies) {
@@ -43,8 +53,21 @@ export function gameTick(now: number) {
       enemyUpdates.set(enemy.id, { hitFlash: Math.max(0, enemy.hitFlash - 16) });
     }
 
+    if (shouldSample) {
+      let trail = enemyTrailSamples.get(enemy.id);
+      if (!trail) {
+        trail = [];
+        enemyTrailSamples.set(enemy.id, trail);
+      }
+      trail.push({ x: enemy.x, y: enemy.y, pathIndex: enemy.pathIndex });
+      if (trail.length > SHADOW_TRAIL_MAX) {
+        trail.shift();
+      }
+    }
+
     if (enemy.pathIndex >= path.length - 1) {
       enemiesToRemove.push(enemy.id);
+      escapedEnemies.push({ id: enemy.id, type: enemy.type });
       useGameStore.getState().loseLife(ENEMY_CONFIGS[enemy.type].damage);
       continue;
     }
@@ -57,6 +80,9 @@ export function gameTick(now: number) {
     let speed = ENEMY_CONFIGS[enemy.type].speed;
     if (enemy.slowUntil > now) {
       speed *= enemy.slowFactor;
+    }
+    if (enemy.shadowBoostUntil && enemy.shadowBoostUntil > now) {
+      speed *= SHADOW_BOOST_MULTIPLIER;
     }
 
     if (dist < speed * 2) {
@@ -73,6 +99,14 @@ export function gameTick(now: number) {
         y: enemy.y + vy,
       });
     }
+  }
+
+  for (const esc of escapedEnemies) {
+    const trail = enemyTrailSamples.get(esc.id);
+    if (trail && trail.length > 0) {
+      useGameStore.getState().recordEscapedEnemy(esc.type, [...trail]);
+    }
+    enemyTrailSamples.delete(esc.id);
   }
 
   for (const [id, updates] of enemyUpdates) {
@@ -195,6 +229,7 @@ export function gameTick(now: number) {
         gold: s.gold + reward,
         waveReward: s.waveReward + reward,
       }));
+      enemyTrailSamples.delete(eId);
       newFloatingTexts.push({
         id: `reward-${now}-${eId}`,
         x: e.x,
@@ -293,6 +328,11 @@ export function isSpawnActive() {
   return spawnQueueActive;
 }
 
+export function clearTrailCache() {
+  enemyTrailSamples.clear();
+  sampleCounter = 0;
+}
+
 export function drawBattlefield(
   ctx: CanvasRenderingContext2D,
   hoverCell: { x: number; y: number } | null
@@ -367,6 +407,44 @@ export function drawBattlefield(
   ctx.fill();
   ctx.fillStyle = "white";
   ctx.fillText("厨", endP.x, endP.y);
+
+  if (state.shadowTrails.length > 0) {
+    const uniqueTypes = new Set(state.shadowTrails.map((t) => t.type));
+    for (const type of uniqueTypes) {
+      const trails = state.shadowTrails.filter((t) => t.type === type);
+      const lastTrail = trails[trails.length - 1];
+      if (!lastTrail) continue;
+
+      ctx.save();
+      ctx.globalAlpha = 0.35;
+      ctx.strokeStyle = "#7B1FA2";
+      ctx.lineWidth = 4;
+      ctx.setLineDash([6, 6]);
+      ctx.beginPath();
+      const positions = lastTrail.pathPositions;
+      if (positions.length > 0) {
+        ctx.moveTo(positions[0].x, positions[0].y);
+        for (let i = 1; i < positions.length; i++) {
+          ctx.lineTo(positions[i].x, positions[i].y);
+        }
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      if (positions.length > 0) {
+        const last = positions[positions.length - 1];
+        ctx.font = "20px sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.globalAlpha = 0.5;
+        const cfg = ENEMY_CONFIGS[type];
+        if (cfg) {
+          ctx.fillText(cfg.emoji, last.x, last.y);
+        }
+      }
+      ctx.restore();
+    }
+  }
 
   if (hoverCell && state.selectedTowerType) {
     const canPlace =
@@ -445,8 +523,31 @@ export function drawBattlefield(
   for (const enemy of state.enemies) {
     const cfg = ENEMY_CONFIGS[enemy.type];
     const isFrozen = enemy.slowUntil > performance.now();
+    const hasBoost = enemy.shadowBoostUntil && enemy.shadowBoostUntil > performance.now();
     const scale = enemy.type === "boss" ? 1.5 : 1;
     const r = 16 * scale;
+
+    if (hasBoost) {
+      ctx.save();
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = "#9C27B0";
+      ctx.beginPath();
+      ctx.arc(enemy.x, enemy.y, r + 10, 0, Math.PI * 2);
+      ctx.fill();
+
+      const trail = enemyTrailSamples.get(enemy.id);
+      if (trail && trail.length > 1) {
+        ctx.strokeStyle = "rgba(156,39,176,0.5)";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(trail[0].x, trail[0].y);
+        for (let i = 1; i < trail.length; i++) {
+          ctx.lineTo(trail[i].x, trail[i].y);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
 
     if (isFrozen) {
       ctx.fillStyle = "rgba(79,195,247,0.3)";
@@ -483,6 +584,12 @@ export function drawBattlefield(
     ctx.strokeStyle = "rgba(255,255,255,0.8)";
     ctx.lineWidth = 1;
     ctx.strokeRect(barX, barY, barW, barH);
+
+    if (hasBoost) {
+      ctx.fillStyle = "#9C27B0";
+      ctx.font = "bold 10px sans-serif";
+      ctx.fillText("⚡影速", enemy.x, enemy.y + r + 12);
+    }
   }
 
   for (const bullet of state.bullets) {
@@ -522,6 +629,21 @@ export function drawBattlefield(
     ctx.fillStyle = ft.color;
     ctx.fillText(ft.text, ft.x, ft.y - offsetY);
     ctx.globalAlpha = 1;
+  }
+
+  if (state.revertNode) {
+    ctx.save();
+    ctx.fillStyle = "rgba(156,39,176,0.9)";
+    ctx.font = "bold 11px sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    const nodeWave = state.revertNode.waveIndex + 1;
+    const rectText = `⏪ 回锅节点: 第${nodeWave}波前`;
+    const textMetrics = ctx.measureText(rectText);
+    ctx.fillRect(8, 8, textMetrics.width + 16, 22);
+    ctx.fillStyle = "white";
+    ctx.fillText(rectText, 16, 13);
+    ctx.restore();
   }
 
   if (state.isPaused) {

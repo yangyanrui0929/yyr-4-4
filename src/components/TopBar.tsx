@@ -1,5 +1,5 @@
 import { useGameStore } from "@/store/useGameStore";
-import { Sun, Moon, Save, RotateCcw, Heart, Coins, Calendar } from "lucide-react";
+import { Sun, Moon, Save, RotateCcw, Heart, Coins, Calendar, Ticket } from "lucide-react";
 
 export default function TopBar() {
   const {
@@ -7,6 +7,7 @@ export default function TopBar() {
     phase,
     gold,
     lives,
+    revertTickets,
     saveProgress,
     resetGame,
   } = useGameStore();
@@ -35,6 +36,11 @@ export default function TopBar() {
           <div className="flex items-center gap-1.5 bg-red-500/20 rounded-full px-4 py-1.5">
             <Heart className="w-4 h-4 text-red-300 fill-red-300" />
             <span className="font-bold text-red-200">{lives}</span>
+          </div>
+
+          <div className="flex items-center gap-1.5 bg-purple-500/20 rounded-full px-4 py-1.5">
+            <Ticket className="w-4 h-4 text-purple-300" />
+            <span className="font-bold text-purple-200">🎟️ {revertTickets}</span>
           </div>
 
           <div className="flex items-center gap-1.5 bg-blue-500/20 rounded-full px-4 py-1.5">

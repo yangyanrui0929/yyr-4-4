@@ -241,3 +241,11 @@ export function generateWaves(day: number): WaveConfig[] {
 
 export const INITIAL_GOLD = 200;
 export const INITIAL_LIVES = 10;
+
+export const HIGH_PROFIT_THRESHOLD = 200;
+
+export const SHADOW_BOOST_DURATION = 4000;
+export const SHADOW_BOOST_MULTIPLIER = 1.8;
+
+export const SHADOW_TRAIL_MAX = 20;
+export const SHADOW_TRAIL_SAMPLE_INTERVAL = 4;

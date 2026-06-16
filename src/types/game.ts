@@ -65,6 +65,21 @@ export interface Enemy {
   slowUntil: number;
   slowFactor: number;
   hitFlash: number;
+  shadowBoostUntil?: number;
+}
+
+export interface ShadowTrail {
+  type: EnemyType;
+  day: number;
+  pathPositions: { x: number; y: number; pathIndex: number }[];
+}
+
+export interface RevertNode {
+  gold: number;
+  lives: number;
+  towers: Tower[];
+  savedAt: number;
+  waveIndex: number;
 }
 
 export interface Bullet {
@@ -113,4 +128,10 @@ export interface GameState {
   gridPath: { x: number; y: number }[];
   isPaused: boolean;
   gameOver: boolean;
+  revertTickets: number;
+  revertNode: RevertNode | null;
+  shadowTrails: ShadowTrail[];
+  escapedCount: number;
+  hadPerfectNight: boolean;
+  earnedTicketsToday: number;
 }

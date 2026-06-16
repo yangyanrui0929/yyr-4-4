@@ -1,5 +1,6 @@
 import { useGameStore } from "@/store/useGameStore";
-import { TrendingUp, TrendingDown, DollarSign, Sun, RotateCcw, Skull } from "lucide-react";
+import { HIGH_PROFIT_THRESHOLD } from "@/game/config";
+import { TrendingUp, TrendingDown, DollarSign, Sun, RotateCcw, Skull, Ticket, ShieldCheck, TrendingUp as TrendingUpIcon } from "lucide-react";
 
 export default function SettlementModal() {
   const {
@@ -11,10 +12,14 @@ export default function SettlementModal() {
     gameOver,
     startDay,
     resetGame,
+    hadPerfectNight,
+    revertTickets,
+    earnedTicketsToday,
   } = useGameStore();
 
   const netProfit = todayRevenue - todayExpense;
   const isProfit = netProfit >= 0;
+  const isHighProfit = netProfit >= HIGH_PROFIT_THRESHOLD;
 
   let foodRevenue = 0;
   for (const r of recipes) {
@@ -58,7 +63,7 @@ export default function SettlementModal() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-lg w-full animate-bounce-in">
+      <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-lg w-full animate-bounce-in max-h-[90vh] overflow-y-auto">
         <div className="text-center mb-6">
           <div className="text-5xl mb-2">📊</div>
           <h2 className="font-display text-3xl text-kitchen-brown">
@@ -67,7 +72,7 @@ export default function SettlementModal() {
           <p className="text-gray-500 text-sm mt-1">辛苦啦！来看看今天的业绩吧</p>
         </div>
 
-        <div className="space-y-3 mb-6">
+        <div className="space-y-3 mb-5">
           <div className="flex items-center justify-between p-3 bg-green-50 rounded-xl border border-green-200">
             <div className="flex items-center gap-2">
               <span className="text-2xl">🍽️</span>
@@ -134,7 +139,94 @@ export default function SettlementModal() {
           </div>
         </div>
 
-        <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 mb-6">
+        <div className="mb-5">
+          <div className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
+            <Ticket className="w-4 h-4 text-purple-600" />
+            🎟️ 回锅券奖励结算
+          </div>
+          <div className="space-y-2">
+            <div
+              className={`flex items-center justify-between p-2.5 rounded-lg ${
+                hadPerfectNight
+                  ? "bg-purple-100 border border-purple-300"
+                  : "bg-gray-50 border border-gray-200"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <ShieldCheck
+                  className={`w-4 h-4 ${
+                    hadPerfectNight ? "text-purple-600" : "text-gray-400"
+                  }`}
+                />
+                <span
+                  className={`text-sm ${
+                    hadPerfectNight ? "text-purple-700 font-medium" : "text-gray-500"
+                  }`}
+                >
+                  无漏怪完美防守
+                </span>
+              </div>
+              <span
+                className={`font-bold ${
+                  hadPerfectNight ? "text-purple-600" : "text-gray-400"
+                }`}
+              >
+                {hadPerfectNight ? "+🎟️ 1" : "未达成"}
+              </span>
+            </div>
+
+            <div
+              className={`flex items-center justify-between p-2.5 rounded-lg ${
+                isHighProfit
+                  ? "bg-purple-100 border border-purple-300"
+                  : "bg-gray-50 border border-gray-200"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <TrendingUpIcon
+                  className={`w-4 h-4 ${
+                    isHighProfit ? "text-purple-600" : "text-gray-400"
+                  }`}
+                />
+                <span
+                  className={`text-sm ${
+                    isHighProfit ? "text-purple-700 font-medium" : "text-gray-500"
+                  }`}
+                >
+                  高利润经营 (≥{HIGH_PROFIT_THRESHOLD})
+                </span>
+              </div>
+              <span
+                className={`font-bold ${
+                  isHighProfit ? "text-purple-600" : "text-gray-400"
+                }`}
+              >
+                {isHighProfit ? "+🎟️ 1" : `还差 ${Math.max(0, HIGH_PROFIT_THRESHOLD - netProfit)}`}
+              </span>
+            </div>
+
+            <div className="p-3 bg-gradient-to-r from-purple-100 to-fuchsia-100 rounded-lg border border-purple-300">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Ticket className="w-5 h-5 text-purple-600" />
+                  <span className="font-bold text-purple-800">回锅券总数</span>
+                </div>
+                <div className="text-right">
+                  <div className="font-display text-2xl text-purple-700">
+                    🎟️ {revertTickets}
+                  </div>
+                  {earnedTicketsToday > 0 && (
+                    <div className="text-xs text-purple-500">
+                      今日获得 +{earnedTicketsToday}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 mb-5">
           <div className="text-sm text-amber-800">
             <span className="font-medium">📦 准备的菜品：</span>
             <div className="flex flex-wrap gap-2 mt-2">
